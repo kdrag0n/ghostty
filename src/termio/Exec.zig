@@ -1429,9 +1429,12 @@ pub const ReadThread = struct {
                 };
 
                 // This happens on macOS instead of WouldBlock when the
-                // child process dies. To be safe, we just break the loop
-                // and let our poll happen.
-                if (n == 0) break;
+                // child process dies. It's equivalent to NotOpenForReading
+                // so we can just exit.
+                if (n == 0) {
+                    log.info("io reader exiting", .{});
+                    return;
+                }
 
                 // log.info("DATA: {d}", .{n});
                 @call(.always_inline, termio.Termio.processOutput, .{ io, buf[0..n] });
