@@ -179,8 +179,11 @@ pub fn threadExit(self: *Exec, td: *termio.Termio.ThreadData) void {
     // Quit our read thread after exiting the subprocess so that
     // we don't get stuck waiting for data to stop flowing if it is
     // a particularly noisy process.
-    _ = posix.write(exec.read_thread_pipe, "x") catch |err|
-        log.warn("error writing to read thread quit pipe err={}", .{err});
+    if (exec.read_thread_pipe) |pipe| {
+        posix.close(pipe);
+        // Tell deinit that we've already closed the pipe
+        exec.read_thread_pipe = null;
+    }
 
     if (comptime builtin.os.tag == .windows) {
         // Interrupt the blocking read so the thread can see the quit message
@@ -639,7 +642,7 @@ pub const ThreadData = struct {
 
     /// Reader thread state
     read_thread: std.Thread,
-    read_thread_pipe: posix.fd_t,
+    read_thread_pipe: ?posix.fd_t,
     read_thread_fd: posix.fd_t,
 
     /// The timer to detect termios state changes.
@@ -652,7 +655,11 @@ pub const ThreadData = struct {
     termios_mode: ptypkg.Mode = .{},
 
     pub fn deinit(self: *ThreadData, alloc: Allocator) void {
-        posix.close(self.read_thread_pipe);
+        // threadExit may already have closed this pipe to signal the reader
+        // to exit.
+        if (self.read_thread_pipe) |pipe| {
+            posix.close(pipe);
+        }
 
         // Clear our write pools. We know we aren't ever going to do
         // any more IO since we stop our data stream below so we can just
@@ -1446,8 +1453,8 @@ pub const ReadThread = struct {
                 return;
             };
 
-            // If our quit fd is set, we're done.
-            if (pollfds[1].revents & posix.POLL.IN != 0) {
+            // If our quit fd is closed, we're done.
+            if (pollfds[1].revents & posix.POLL.HUP != 0) {
                 log.info("read thread got quit signal", .{});
                 return;
             }
