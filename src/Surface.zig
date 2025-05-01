@@ -5006,7 +5006,7 @@ fn writeScreenFile(
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = try tmp_dir.dir.realpath(filename, &path_buf);
 
-    var cmd_buf: [std.fs.MAX_PATH_BYTES + 1024]u8 = undefined;
+    var cmd_buf: [std.fs.max_path_bytes + 1024]u8 = undefined;
     const cmd = try std.fmt.bufPrint(&cmd_buf, "\nless -f --RAW-CONTROL-CHARS +G '{s}'; rm -f '{s}'\n?", .{ path, path });
 
     switch (write_action) {
